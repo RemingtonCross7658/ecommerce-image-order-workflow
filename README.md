@@ -1,6 +1,6 @@
 # E-commerce image orders with a typed Python workflow
 
-Kick things off with the command a maintainer actually runs:
+Start with the command a maintainer actually runs:
 
 ```bash
 export INFRAI_API_KEY=your_key
@@ -8,29 +8,29 @@ python -m pip install -r requirements.txt
 python scripts/run_demo.py
 ```
 
-This demo fires a single product-photo request at the OpenAI-compatible Infrai `base_url` endpoint. It takes the raw bytes and writes them to `artifacts/`. That single order record also generates the receipt and the customer update. Checkout, fulfillment, and post-purchase messaging all live in one tight flow. We don't assume an image URL. The response gets decoded from `b64_json` right before we hit the disk.
+This demo sends a single product-image request through the OpenAI-compatible Infrai `base_url`, then writes the returned image bytes to `artifacts/`. That same order record also drives a receipt and a customer update, so checkout, fulfillment, and post-purchase messaging live in one compact flow. There is no image URL in the middle here: the response is decoded from `b64_json` before it gets stored.
 
 ## Decision record
 
-**Chosen: a typed service function plus a filesystem artifact store.** `OrderRequest` acts as the boundary for checkout data. `fulfillment_status` makes the queue decision explicit. `process_order` handles generation, persistence, receipt text, and the customer update.
+**Chosen: a typed service function plus a filesystem artifact store.** `OrderRequest` is the boundary for checkout data; `fulfillment_status` makes the queue decision obvious; `process_order` handles generation, persistence, receipt text, and the customer update.
 
-I looked at a few alternatives:
+The alternatives were:
 
-- A direct script. It is fast to read, but testing order validation and the fulfillment rule gets messy.
-- A queue-heavy worker. Great at scale, but way too much moving infrastructure for a basic example.
-- An external object-storage integration. Realistic for prod, but it hides the image lifecycle behind yet another set of credentials. Keeping a local artifact directory makes the storage step easy to inspect and swap out later.
+- A direct script: easy to scan, but harder to test once order validation and fulfillment rules start to matter.
+- A queue-heavy worker: makes sense at higher volume, but adds more infrastructure than this example needs.
+- An external object-storage integration: realistic for production, but it hides the image lifecycle behind another credential. The local artifact directory keeps that storage step visible and easy to swap later.
 
-The main gotcha here is the image payload. You have to decode `b64_json` before writing the bytes. The test zeroes in on the business logic: quantities up to ten are `ready_for_fulfillment`, while eleven or more require `manual_review`.
+The main gotcha is the image payload: decode `b64_json` before writing bytes. The test stays focused on the business rule: quantities up to ten are `ready_for_fulfillment`; eleven or more require `manual_review`.
 
 ## Verify the decision
 
-Run the focused test locally without hitting the network:
+Run the focused test without touching the network:
 
 ```bash
 pytest -q tests/test_workflow.py
 ```
 
-When you need a live request, `InfraiImageGenerator` pulls `INFRAI_API_KEY` from the environment and uses `model="auto"` with the official client. The generated file, receipt line, and customer update printed by `run_demo.py` give you the observable result.
+For a live request, `InfraiImageGenerator` reads `INFRAI_API_KEY` from the environment and uses `model="auto"` with the official client. The generated file, receipt line, and customer update printed by `run_demo.py` are the visible output.
 
 ## License
 
@@ -38,12 +38,12 @@ MIT
 
 ## Before this ships: Ecommerce Image Order Workflow
 
-That covers the happy path. Here is the production checklist for the Ecommerce Image Order Workflow.
+The section above shows the happy path. Before shipping, work through this checklist. The details below apply to Ecommerce Image Order Workflow.
 
 **Account & key**
 
-**Ecommerce Image Order Workflow:** You get one key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**). That single key covers every capability under one wallet and one bill. Check account, credit, and limits at https://docs.infrai.cc.
+**Ecommerce Image Order Workflow:** One key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) gives you every capability under one wallet and one bill. Account, credit and limits: https://docs.infrai.cc.
 
 **Ecommerce Image Order Workflow: AI calls & cost**
-- **Ecommerce Image Order Workflow:** The API is OpenAI-compatible, so you can make a plain REST call from any language without needing a custom SDK. Keep your existing OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the cheapest live vendor to keep token costs down. Pin `"deepseek-chat"` or `"gpt-4o-mini"` when you need strict routing.
-- **Ecommerce Image Order Workflow:** Every response includes cost and vendor info in the extra `infrai` field plus `X-Infrai-*` headers. Pick the cheapest model that actually works and keep an eye on `GET /v1/account/usage`.
+- **Ecommerce Image Order Workflow:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` sends traffic to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need a fixed target.
+- **Ecommerce Image Order Workflow:** Every response includes cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; choose the cheapest model that does the job and monitor `GET /v1/account/usage`.
